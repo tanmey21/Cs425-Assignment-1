@@ -11,19 +11,16 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
-#include <algorithm> // Added for std::remove_if
+#include <algorithm>
 #include <fstream>
 
 #define BUFFER_SIZE 1024
 #define MAX_CLIENTS 10
 #define PORT 12345
 
+// Mutex for thread-safe console output and client management
 std::mutex cout_mutex;
 std::mutex clients_mutex;
-
-//Path:Desktop/CS425/ASSIGNMENTS/ASS-1\ PART3/Homeworks/A1
-//Compile:g++ -std=c++17 server_grp.cpp -o server_grp
-//Compile client:g++ -std=c++17 client_grp.cpp -o client_grp
 
 
 std :: unordered_map < int , std :: string > clients ; // Clientsocket -> username
@@ -57,7 +54,9 @@ void load_users_from_file(const std::string& filename) {
     file.close();
 }
 
+// Function to authenticate a user
 bool Authenticating_user(const std::string Username,const std::string Password){
+    std::lock_guard<std::mutex> lock(clients_mutex);
     if(user_credentials.count(Username) && user_credentials[Username]==Password)return true;
     return false;
 }
@@ -77,9 +76,10 @@ void broadcast_message(const std::string& message, int sender_socket,int flag) {
         }
     }
 }
+
+// Function to send a direct message to a specific user
 void direct_message(const std::string& message, int client_socket,const std::string& username) {
     std::lock_guard<std::mutex> lock(clients_mutex);
-
             std::string new_message="["+clients[client_socket]+"]"+":"+message+'\n';
     
             if (send(sock[username], new_message.c_str(), new_message.size(), 0) < 0) {
@@ -88,8 +88,9 @@ void direct_message(const std::string& message, int client_socket,const std::str
             }
 }
 
-void group_message(std::string gname,const std::string& message, int sender_socket,int flag) {
-    std::lock_guard<std::mutex> lock(clients_mutex);
+// Function to send a message to a specific group
+void group_message(std::string gname,const std::string& message, int sender_socket,int flag,int flag2) {
+    if(flag2){std::lock_guard<std::mutex> lock(clients_mutex);}
     for (const auto& client : groups[gname]) {
         if (client != sender_socket) {
             std::string new_message;
@@ -99,12 +100,13 @@ void group_message(std::string gname,const std::string& message, int sender_sock
                 std::lock_guard<std::mutex> lock(cout_mutex);
                 std::cerr << "Error sending message to client " << clients[client] << std::endl;
             }
-        }
+        } 
     }
 }
 
-//functions related to groups features
+// Function to create a new group
 void create_group(std::string gname,int client_socket){
+   std::lock_guard<std::mutex> lock(clients_mutex);
     groups[gname].insert(client_socket);
     std::string message1="Group "+gname+" is created and joined.\n";
     if (send(client_socket, message1.c_str(), message1.size(), 0) < 0) {
@@ -113,17 +115,23 @@ void create_group(std::string gname,int client_socket){
             }
     return;
 }
+
+// Function to join an existing group
 void join_group(std::string gname,int client_socket){
+    std::lock_guard<std::mutex> lock(clients_mutex);
     groups[gname].insert(client_socket);
     std::string message1="You have Joined the group:"+gname+"!\n";
-    std::string message2=clients[client_socket]+" has Joined the group!"+gname+'\n';
+    std::string message2=clients[client_socket]+" has Joined the group "+gname+"\n";
     if (send(client_socket, message1.c_str(), message1.size(), 0) < 0) {
                 std::lock_guard<std::mutex> lock(cout_mutex);
                 std::cerr << "Error sending message to client " << clients[client_socket] << std::endl;
             }
-    group_message(gname,message2,client_socket,0);
+    group_message(gname,message2,client_socket,0,0);
 }
+
+// Function to leave a group
 void leave_group(std::string gname,int client_socket){
+    std::lock_guard<std::mutex> lock(clients_mutex);
     groups[gname].erase(client_socket);
     std::string message1="You have left the group "+gname+" !\n";
     std::string message2=clients[client_socket]+" has left the group.\n";
@@ -131,10 +139,11 @@ void leave_group(std::string gname,int client_socket){
                 std::lock_guard<std::mutex> lock(cout_mutex);
                 std::cerr << "Error sending message to client " << clients[client_socket] << std::endl;
             }
-    group_message(gname,message2,client_socket,0);
+    group_message(gname,message2,client_socket,0,0);
 }
 
-void process_message(int client_socket, const std::string& message) {
+// Function to process different types of messages
+void process_message(int client_socket, std::string& message) {
     if (message.rfind("/group_msg ", 0) == 0) { // Check if the message starts with "/group_msg "
         size_t space1 = message.find(' ');
         size_t space2 = message.find(' ', space1 + 1);
@@ -142,8 +151,16 @@ void process_message(int client_socket, const std::string& message) {
         if (space1 != std::string::npos && space2 != std::string::npos) {
             std::string group_name = message.substr(space1 + 1, space2 - space1 - 1);
             std::string group_msg = message.substr(space2 + 1);
-            
-            group_message(group_name, group_msg, client_socket,1);
+            if(!groups.count(group_name)){
+                group_msg="Group with group name "+group_name+" not found!";
+                if (send(client_socket, group_msg.c_str(), group_msg.size(), 0) < 0) {
+                std::lock_guard<std::mutex> lock(cout_mutex);
+                std::cerr << "Error sending message to client " << clients[client_socket] << std::endl;
+            }
+            std::lock_guard<std::mutex> lock(cout_mutex);
+                std::cout << "Error: Wrong group name was mentioned."<<std::endl ;
+            }
+            else group_message(group_name, group_msg, client_socket,1,1);
         }
     }
     else if(message.rfind("/broadcast ",0)==0){
@@ -159,7 +176,17 @@ void process_message(int client_socket, const std::string& message) {
         
         if (space_pos != std::string::npos) {
             std::string gname = message.substr(space_pos + 1);
-            join_group(gname, client_socket);
+            if(!groups.count(gname)){
+                std::string group_msg="Group with group name "+gname+" not found!";
+                if (send(client_socket, group_msg.c_str(), group_msg.size(), 0) < 0) {
+                std::lock_guard<std::mutex> lock(cout_mutex);
+                std::cerr << "Error sending message to client " << clients[client_socket] << std::endl;
+            }
+
+            std::lock_guard<std::mutex> lock(cout_mutex);
+                std::cout << "Error: Wrong group name was mentioned."<<std::endl; ;
+            }
+            else join_group(gname, client_socket);
         }
     }
     else if(message.rfind("/msg ",0)==0){
@@ -169,8 +196,18 @@ void process_message(int client_socket, const std::string& message) {
         if (space1 != std::string::npos && space2 != std::string::npos) {
             std::string username = message.substr(space1 + 1, space2 - space1 - 1); // Extract username
             std::string user_message = message.substr(space2 + 1); // Extract message
+
+            if(!sock.count(username)){
+                message="User with username "+username+" not found!";
+                if (send(client_socket, message.c_str(), message.size(), 0) < 0) {
+                std::lock_guard<std::mutex> lock(cout_mutex);
+                std::cerr << "Error sending message to client " << clients[client_socket] << std::endl;
+            }
+                std::lock_guard<std::mutex> lock(cout_mutex);
+                std::cout << "Error: Wrong username was mentioned."<<std::endl ;
+            }
             
-            direct_message(user_message, client_socket,username);
+           else direct_message(user_message, client_socket,username);
         }
     }
     else if(message.rfind("/create_group ",0)==0){
@@ -178,7 +215,21 @@ void process_message(int client_socket, const std::string& message) {
         
         if (space_pos != std::string::npos) {
             std::string gname = message.substr(space_pos + 1);
-            create_group(gname, client_socket);
+            std::string wrong_message;
+            if(gname==""){
+                wrong_message="Group name is Empty.";
+            }
+            else wrong_message="This group already exists.";
+
+            if(gname=="" || groups.count(gname)){
+                if (send(client_socket, wrong_message.c_str(), wrong_message.size(), 0) < 0) {
+                std::lock_guard<std::mutex> lock(cout_mutex);
+                std::cerr << "Error sending message to client " << clients[client_socket] << std::endl;
+            }
+            std::lock_guard<std::mutex> lock(cout_mutex);
+                std::cout << "Error: Wrong group name was mentioned."<<std::endl ;
+            }
+           else create_group(gname, client_socket);
         }
     }
     else if(message.rfind("/leave_group ",0)==0){
@@ -187,7 +238,22 @@ void process_message(int client_socket, const std::string& message) {
         
         if (space_pos != std::string::npos) {
             std::string gname = message.substr(space_pos + 1);
-            leave_group(gname, client_socket);
+            std::string wrong_message;
+            if(gname==""){
+                wrong_message="Group name is Empty.";
+            }
+            else if(!groups.count(gname)) wrong_message="This name group does not exists.";
+            else if(!groups[gname].count(client_socket))wrong_message="You are already not a part of this group!";
+
+            if(gname=="" || !groups.count(gname) || groups[gname].count(client_socket)){
+                if (send(client_socket, wrong_message.c_str(), wrong_message.size(), 0) < 0) {
+                std::lock_guard<std::mutex> lock(cout_mutex);
+                std::cerr << "Error sending message to client " << clients[client_socket] << std::endl;
+            }
+            std::lock_guard<std::mutex> lock(cout_mutex);
+                std::cout << "Error: Wrong group name was mentioned."<<std::endl ;
+            }
+            else leave_group(gname, client_socket);
         }
     }
     else{
@@ -196,6 +262,8 @@ void process_message(int client_socket, const std::string& message) {
                 std::lock_guard<std::mutex> lock(cout_mutex);
                 std::cerr << "Error sending message to client " << clients[client_socket] << std::endl;
             }
+            std::lock_guard<std::mutex> lock(cout_mutex);
+                std::cout << "Error:Message is given in wrong format."<<std::endl ;
     }
 }
 
@@ -322,10 +390,7 @@ int main() {
         return 1;
     }
 
-    // Define server address
-    // server_address.sin_family = AF_INET;
-    // server_address.sin_port = htons(12345);
-    // server_address.sin_addr.s_addr = INADDR_ANY;
+        //Define server address
         server_address.sin_family = AF_INET;
     server_address.sin_port = htons(12345);
     server_address.sin_addr.s_addr = INADDR_ANY;
@@ -337,9 +402,6 @@ int main() {
     close(server_socket);
     return 1; 
  }
-
-    //  bind(server_socket, (struct sockaddr*)&server_address,
-    //      sizeof(server_address));
 
     // Start listening for incoming connections
     if (listen(server_socket, MAX_CLIENTS) < 0) {
