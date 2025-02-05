@@ -1,6 +1,6 @@
-#﻿Multi-Threaded Chat Server - CS425
+#﻿ Multi-Threaded Chat Server - CS425
 
-##Assignment 1
+## Assignment 1
 
 Group Members: Tanmey Agarwal (211098), Kumar Kanishk
 
