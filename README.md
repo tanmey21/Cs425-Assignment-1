@@ -1,5 +1,4 @@
-
-#﻿ Multithreaded Chat Server CS425
+Multithreaded Chat Server CS425
 
 ## Assignment 1
 
