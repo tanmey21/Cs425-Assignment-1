@@ -2,18 +2,16 @@
 
 ## Assignment 1
 
-Group Members: Tanmey Agarwal (211098), Kumar Kanishk
-
-Singh (210544), Sunny Raja Prasad (218171078)
+Group Members: Tanmey Agarwal (211098), Kumar Kanishk Singh (210544), Sunny Raja Prasad (218171078)
 
 
-How to run the code?
+### How to run the code?
 1. Start the server using ./server_grp
 2. Start each client using ./client_grp
 3. Enter the username and password, if they matches the client will be added to the network.
 
-1  Features
-1.1 Implemented Features
+### 1.  Features
+#### 1.1 Implemented Features
 - TCP-based server that listens on port 12345
 - Handles multiple concurrent client connections
 - Authenticating only those users which are in users.txt file.
@@ -25,7 +23,7 @@ How to run the code?
 - /join_group<group_name> to join a group
 - /leave_group<group_name> to leave a group
 
-1.2 Not Implemented Features
+#### 1.2 Not Implemented Features
 - No frontend, have to type messages from terminal.
 - Persistent storage for messages even if server is closed.
 
