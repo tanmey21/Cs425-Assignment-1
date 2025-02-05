@@ -1,6 +1,6 @@
-﻿Multi-Threaded Chat Server - CS425
+#﻿Multi-Threaded Chat Server - CS425
 
-Assignment 1
+##Assignment 1
 
 Group Members: Tanmey Agarwal (211098), Kumar Kanishk
 
@@ -8,9 +8,9 @@ Singh (210544), Sunny Raja Prasad (218171078)
 
 
 How to run the code?
-    -Start the server using ./server_grp
-    -Start each client using ./client_grp
-    -Enter the username and password, if they matches the client will be added to the network.
+    1. Start the server using ./server_grp
+    2. Start each client using ./client_grp
+    3. Enter the username and password, if they matches the client will be added to the network.
 
 1  Features
   1.1 Implemented Features
